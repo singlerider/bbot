@@ -1747,7 +1747,11 @@ class HTTP_RESPONSE(URL_UNVERIFIED):
         return body_bytes.decode("utf-8", errors="replace")
 
     def _data_id(self):
-        return self.data["method"] + "|" + self.data["url"]
+        data_id = self.data["method"] + "|" + self.data["url"]
+        body_mmh3 = self.data.get("hash", {}).get("body_mmh3", None)
+        if body_mmh3 is not None:
+            data_id += "|" + str(body_mmh3)
+        return data_id
 
     def sanitize_data(self, data):
         url = data.get("url", "")
