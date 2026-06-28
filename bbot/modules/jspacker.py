@@ -10,25 +10,25 @@ PACKER_PATTERN = re.compile(
     r"'(?P<keywords>(?:\\.|[^'\\])*)'\.split\('\|'\)",
     re.DOTALL,
 )
-BASE_DIGITS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 WORD_PATTERN = re.compile(r"\b\w+\b")
 
 
-def encode_token(index, radix):
-    prefix = "" if index < radix else encode_token(index // radix, radix)
-    remainder = index % radix
-    if remainder > 35:
-        return prefix + chr(remainder + 29)
-    return prefix + BASE_DIGITS[remainder]
-
-
-def build_lookup(keywords, radix, count):
-    lookup = {}
-    for index in range(count):
-        token = encode_token(index, radix)
-        keyword = keywords[index] if index < len(keywords) and keywords[index] else token
-        lookup[token] = keyword
-    return lookup
+def decode_token(token, radix):
+    value = 0
+    for char in token:
+        code = ord(char)
+        if 48 <= code <= 57:
+            digit = code - 48
+        elif 97 <= code <= 122:
+            digit = code - 87
+        elif 65 <= code <= 90:
+            digit = code - 29
+        else:
+            return None
+        if digit >= radix:
+            return None
+        value = value * radix + digit
+    return value
 
 
 def unpack_payload(match):
@@ -36,8 +36,16 @@ def unpack_payload(match):
     radix = int(match.group("radix"))
     count = int(match.group("count"))
     keywords = match.group("keywords").split("|")
-    lookup = build_lookup(keywords, radix, count)
-    return WORD_PATTERN.sub(lambda token: lookup.get(token.group(0), token.group(0)), payload)
+    limit = min(count, len(keywords))
+
+    def resolve(token):
+        literal = token.group(0)
+        index = decode_token(literal, radix)
+        if index is None or index >= limit:
+            return literal
+        return keywords[index] or literal
+
+    return WORD_PATTERN.sub(resolve, payload)
 
 
 def unpack(text):
